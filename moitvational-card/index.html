@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Motivational Deck - Single Scroll Edit</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --card-glow: rgba(140, 82, 255, 0.15);
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --accent: #8c52ff;
+        }
+
+        /* 
+         * SCROLL SNAPPING 
+         * Automatically locks the viewport to exactly 1 stage per scroll tick!
+         */
+        html {
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg-color);
+            font-family: 'Outfit', sans-serif;
+            color: white;
+            overscroll-behavior: none; /* Prevents bounce effects on Mac/iOS */
+        }
+
+        .placeholder-section {
+            height: 100vh;
+            /* Snaps cleanly when entering or leaving the effect */
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 20px;
+        }
+        .placeholder-section h1 { font-size: 3rem; margin-bottom: 10px;}
+        .placeholder-section p { font-size: 1.2rem; color: var(--text-secondary); }
+        .arrow-down { margin-top: 40px; font-size: 2rem; animation: bounce 2s infinite; }
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-20px); }
+            60% { transform: translateY(-10px); }
+        }
+
+        /* ================================= */
+        /* DECK SECTION SETUP                */
+        /* ================================= */
+        
+        .deck-section {
+            position: relative;
+        }
+
+        .sticky-deck {
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at 50% 0%, #1a1e36, var(--bg-color) 70%);
+            overflow: hidden;
+            perspective: 1000px;
+        }
+
+        /* The triggers that physically intercept the scroll ticks */
+        .trigger-track {
+            position: relative;
+            z-index: 1;
+            /* Pull the track over the sticky-deck so they occupy the same space from the start */
+            margin-top: -100vh; 
+        }
+        
+        .snap-trigger {
+            height: 100vh;
+            width: 100%;
+            /* Forces ONE mouse wheel click to snap perfectly to the next 100vh stage */
+            scroll-snap-align: start; 
+            pointer-events: none; /* Allows clicks to pass through to the cards beneath */
+        }
+
+        .ambient-light {
+            position: absolute;
+            width: 80vw;
+            max-width: 600px;
+            height: 80vw;
+            max-height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--card-glow) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* 
+         * LANDSCAPE CARD STYLE 
+         */
+        .deck-container {
+            position: relative;
+            /* Changed to landscape aspect ratios */
+            width: 90vw;
+            max-width: 650px;
+            height: 55vw;
+            max-height: 360px;
+            min-height: 250px;
+            z-index: 10;
+            transform-style: preserve-3d;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 100%);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 20px;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+            padding: clamp(25px, 5vw, 40px);
+            box-sizing: border-box;
+            
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
+            cursor: pointer;
+            -webkit-font-smoothing: antialiased;
+            backface-visibility: hidden;
+
+            /* Start fully hidden at the bottom */
+            opacity: 0;
+            transform: translateY(60vh) rotate(10deg) scale(0.85);
+
+            /* Very smooth CSS transitions for when 'visible' class is applied */
+            transition: opacity 0.5s ease-out, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+        }
+
+        /* Visiblity & Stacking states mapped to the scroll triggers via JS */
+        
+        .card.card-1.visible {
+            opacity: 1;
+            transform: translateY(0) rotate(-2deg);
+            z-index: 1;
+        }
+        
+        .card.card-2.visible {
+            opacity: 1;
+            transform: translateY(12px) translateX(6px) rotate(1.5deg);
+            z-index: 2;
+        }
+        
+        .card.card-3.visible {
+            opacity: 1;
+            transform: translateY(24px) translateX(-4px) rotate(-1deg);
+            z-index: 3;
+        }
+        
+        .card.card-4.visible {
+            opacity: 1;
+            transform: translateY(36px) translateX(8px) rotate(3deg);
+            z-index: 4;
+        }
+
+        /* Hover Spread */
+        @media (hover: hover) {
+            .deck-container:hover .card.card-4.visible { transform: translateY(20px) translateX(20px) rotate(6deg) scale(1.02); }
+            .deck-container:hover .card.card-3.visible { transform: translateY(10px) translateX(-15px) rotate(-3deg); }
+            .deck-container:hover .card.card-2.visible { transform: translateY(0px) translateX(10px) rotate(2deg); }
+            .deck-container:hover .card.card-1.visible { transform: translateY(-10px) translateX(-10px) rotate(-3deg); }
+        }
+        .deck-container:active .card.card-4.visible { transform: translateY(20px) translateX(20px) rotate(6deg) scale(1.02); }
+        .deck-container:active .card.card-3.visible { transform: translateY(10px) translateX(-15px) rotate(-3deg); }
+
+        /* Enhanced Typography for Landscape orientation */
+        .card-content {
+            display: flex;
+            flex-direction: row;
+            gap: 20px;
+            align-items: flex-start;
+        }
+
+        .card-icon {
+            font-size: clamp(3rem, 7vw, 4.5rem);
+            margin: 0;
+            margin-top: -10px;
+            background: linear-gradient(135deg, #a855f7, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            opacity: 0.8;
+            font-family: serif;
+            line-height: 0.9;
+        }
+
+        .quote {
+            font-size: clamp(1.2rem, 3.5vw, 1.7rem);
+            font-weight: 500;
+            color: var(--text-primary);
+            line-height: 1.4;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            margin: 0;
+        }
+
+        .author { 
+            display: flex; 
+            align-items: center; 
+            gap: 12px; 
+            /* Push author to bottom right implicitly */
+            align-self: flex-end;
+            margin-top: 15px;
+        }
+        .author-line { height: 1px; width: 30px; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+        .author-name {
+            font-size: clamp(0.9rem, 2.5vw, 1.05rem);
+            font-weight: 400;
+            color: var(--text-secondary);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+
+    <section class="placeholder-section">
+        <h1>Welcome to the Site</h1>
+        <p>A single scroll "tick" or swipe will snap perfectly to deal the next card.</p>
+        <div class="arrow-down">↓</div>
+    </section>
+
+    <section class="deck-section">
+        <!-- Visual Layer: Stays sticky for 4 scroll "ticks" -->
+        <div class="sticky-deck">
+            <div class="ambient-light"></div>
+            
+            <div class="deck-container" id="deck">
+                <!-- Card 1 -->
+                <div class="card card-1" id="c0">
+                    <div class="card-content">
+                        <div class="card-icon">"</div>
+                        <div class="quote">The only way to do great work is to love what you do.</div>
+                    </div>
+                    <div class="author">
+                        <div class="author-line"></div>
+                        <div class="author-name">Steve Jobs</div>
+                    </div>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="card card-2" id="c1">
+                    <div class="card-content">
+                        <div class="card-icon">"</div>
+                        <div class="quote">Everything you've ever wanted is on the other side of fear.</div>
+                    </div>
+                    <div class="author">
+                        <div class="author-line"></div>
+                        <div class="author-name">George Addair</div>
+                    </div>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="card card-3" id="c2">
+                    <div class="card-content">
+                        <div class="card-icon">"</div>
+                        <div class="quote">It does not matter how slowly you go as long as you do not stop.</div>
+                    </div>
+                    <div class="author">
+                        <div class="author-line"></div>
+                        <div class="author-name">Confucius</div>
+                    </div>
+                </div>
+
+                <!-- Card 4 -->
+                <div class="card card-4" id="c3">
+                    <div class="card-content">
+                        <div class="card-icon">"</div>
+                        <div class="quote">Believe you can and you're halfway there.</div>
+                    </div>
+                    <div class="author">
+                        <div class="author-line"></div>
+                        <div class="author-name">Theodore Roosevelt</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Logic Layer: Invisible 100vh blocks that intercept snaps -->
+        <div class="trigger-track">
+            <!-- Stage 0 applies to Cards 0 (Card 1) -->
+            <div class="snap-trigger" data-index="0"></div>
+            <!-- Stage 1 applies to Card 1 (Card 2) -->
+            <div class="snap-trigger" data-index="1"></div>
+            <!-- Stage 2 applies to Card 2 (Card 3) -->
+            <div class="snap-trigger" data-index="2"></div>
+            <!-- Stage 3 applies to Card 3 (Card 4) -->
+            <div class="snap-trigger" data-index="3"></div>
+        </div>
+    </section>
+
+    <section class="placeholder-section">
+        <h1>All cards dealt!</h1>
+        <p>Keep scrolling out to continue...</p>
+    </section>
+
+    <!-- JS explicitly tracks which trigger is active to animate the cards -->
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const cards = [
+                document.getElementById('c0'),
+                document.getElementById('c1'),
+                document.getElementById('c2'),
+                document.getElementById('c3')
+            ];
+            
+            // Determine which card should be visible based on scroll intersections
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    // Update layout ONLY when the section pushes 50% into viewport.
+                    // This creates an instantly responsive feel as soon as scroll starts.
+                    if (entry.isIntersecting) {
+                        const targetIndex = parseInt(entry.target.getAttribute('data-index'), 10);
+                        
+                        // Add visible class to target and everything beneath it
+                        cards.forEach((card, currentIdx) => {
+                            if (currentIdx <= targetIndex) {
+                                card.classList.add('visible');
+                            } else {
+                                card.classList.remove('visible');
+                            }
+                        });
+                    }
+                });
+            }, {
+                // threshold 0.5 means effect evaluates when user is halfway snapped into next view
+                threshold: 0.5 
+            });
+
+            // Start observing each snap trigger
+            const triggers = document.querySelectorAll('.snap-trigger');
+            triggers.forEach(trigger => observer.observe(trigger));
+        });
+    </script>
+</body>
+</html>
