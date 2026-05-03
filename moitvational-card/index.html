@@ -150,7 +150,7 @@
             transform: translateY(60vh) rotate(10deg) scale(0.85);
 
             /* Very smooth CSS transitions for when 'visible' class is applied */
-            transition: opacity 0.5s ease-out, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
+            transition: opacity 0.25s ease-out, transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease;
         }
 
         /* Visiblity & Stacking states mapped to the scroll triggers via JS */
@@ -318,7 +318,7 @@
         <p>Keep scrolling out to continue...</p>
     </section>
 
-    <!-- JS explicitly tracks which trigger is active to animate the cards -->
+    <!-- JS: direct drag tracking — card follows scroll 1:1, spring settle on full commit -->
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             const cards = [
@@ -327,33 +327,100 @@
                 document.getElementById('c2'),
                 document.getElementById('c3')
             ];
-            
-            // Determine which card should be visible based on scroll intersections
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => {
-                    // Update layout ONLY when the section pushes 50% into viewport.
-                    // This creates an instantly responsive feel as soon as scroll starts.
-                    if (entry.isIntersecting) {
-                        const targetIndex = parseInt(entry.target.getAttribute('data-index'), 10);
-                        
-                        // Add visible class to target and everything beneath it
-                        cards.forEach((card, currentIdx) => {
-                            if (currentIdx <= targetIndex) {
-                                card.classList.add('visible');
-                            } else {
-                                card.classList.remove('visible');
-                            }
-                        });
+
+            const triggers = [...document.querySelectorAll('.snap-trigger')];
+
+            const finalState = [
+                { y: 0,  x: 0,  rotate: -2  },
+                { y: 12, x: 6,  rotate: 1.5 },
+                { y: 24, x: -4, rotate: -1  },
+                { y: 36, x: 8,  rotate: 3   },
+            ];
+
+            // Whether each card has fully committed and settled at its snap position
+            const settled = cards.map(() => false);
+
+            // Interpolated transform at progress e (0 = fully below, 1 = final stack position)
+            function getTransform(i, e) {
+                const f = finalState[i];
+                return `translateY(calc(${(60*(1-e)).toFixed(2)}vh + ${(f.y*e).toFixed(2)}px)) ` +
+                       `translateX(${(f.x*e).toFixed(2)}px) ` +
+                       `rotate(${(10+(f.rotate-10)*e).toFixed(2)}deg) ` +
+                       `scale(${(0.85+0.15*e).toFixed(4)})`;
+            }
+
+            function getFinalTransform(i) {
+                const f = finalState[i];
+                return `translateY(${f.y}px) translateX(${f.x}px) rotate(${f.rotate}deg)`;
+            }
+
+            function cancelSettle(card) {
+                if (card._settle) {
+                    card.removeEventListener('transitionend', card._settle);
+                    card._settle = null;
+                }
+            }
+
+            function updateCards() {
+                const vh = window.innerHeight;
+
+                triggers.forEach((trigger, index) => {
+                    // raw: 0 = trigger at bottom edge of viewport, 1 = trigger at top (snapped)
+                    const raw  = (vh - trigger.getBoundingClientRect().top) / vh;
+                    const card = cards[index];
+
+                    if (raw >= 1) {
+                        // ── COMMITTED: spring settle into final position ──────────────────
+                        if (!settled[index]) {
+                            settled[index] = true;
+                            cancelSettle(card);
+                            card.classList.remove('visible');
+                            card.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.45, 0.64, 1), opacity 0.2s ease-out';
+                            card.style.opacity    = '1';
+                            card.style.transform  = getFinalTransform(index);
+
+                            card._settle = (ev) => {
+                                if (ev.propertyName !== 'transform') return;
+                                if (settled[index]) {
+                                    card.style.transition = '';
+                                    card.style.transform  = '';
+                                    card.style.opacity    = '';
+                                    card.classList.add('visible');
+                                }
+                                card.removeEventListener('transitionend', card._settle);
+                                card._settle = null;
+                            };
+                            card.addEventListener('transitionend', card._settle);
+                        }
+
+                    } else {
+                        // ── IN MOTION: cancel any settle, track directly ──────────────────
+                        if (settled[index]) {
+                            settled[index] = false;
+                            cancelSettle(card);
+                            card.classList.remove('visible');
+                        }
+
+                        if (raw <= 0) {
+                            // Fully below — pin to hidden position
+                            card.style.transition = 'none';
+                            card.style.transform  = 'translateY(60vh) rotate(10deg) scale(0.85)';
+                            card.style.opacity    = '0';
+                        } else {
+                            // ── DRAG: card is physically pulled up by the scroll ──────────
+                            // No transition — updates every scroll event (~60fps) for a true drag feel.
+                            // When scroll-snap springs back, the browser animates scroll position
+                            // and this block fires on every frame, pulling the card back down with it.
+                            card.style.transition = 'none';
+                            card.style.transform  = getTransform(index, raw);
+                            card.style.opacity    = Math.min(1, raw * 2).toFixed(3);
+                        }
                     }
                 });
-            }, {
-                // threshold 0.5 means effect evaluates when user is halfway snapped into next view
-                threshold: 0.5 
-            });
+            }
 
-            // Start observing each snap trigger
-            const triggers = document.querySelectorAll('.snap-trigger');
-            triggers.forEach(trigger => observer.observe(trigger));
+            window.addEventListener('scroll', updateCards, { passive: true });
+            updateCards();
         });
     </script>
 </body>
